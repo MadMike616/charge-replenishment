@@ -1,5 +1,6 @@
 #include "native.h"
 #include "recharge_policy.h"
+#include "setup.h"
 
 #include <array>
 #include <atomic>
@@ -64,6 +65,7 @@ auto Configuration() noexcept -> bool {
     std::uint32_t needed{};
     if (!Context->ReadConfig(buffer.data(), static_cast<std::uint32_t>(buffer.size()), &needed)) return false;
     std::string_view input(buffer.data());
+    if (input.starts_with("\xEF\xBB\xBF")) input.remove_prefix(3);
     std::string_view section;
     unsigned seen{};
     bool enabled{true};
@@ -94,7 +96,7 @@ auto Configuration() noexcept -> bool {
     }
     if (!enabled) { Context->LogInfo("Charge Replenishment is disabled in configuration."); return true; }
     if (!(seen & 1) || StatId < 398 || StatId > 510) {
-        Context->LogError("Charge Replenishment: run tools/install.py for this mod to install rep-charges and bind its stat ID.");
+        Context->LogError("Charge Replenishment: automatic setup has no valid stat ID. Check the setup error in the plugin log and restart D2RLoader after supplying any missing base files.");
         return false;
     }
     Active.store(true);
@@ -287,7 +289,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
     using namespace Recharge;
     if (!D2RL::HasContext(context)) return false;
     Context = context;
-    if (!Configuration()) return false;
+    if (!Setup::Ensure(context) || !Configuration()) return false;
     if (!Active.load()) return true;
     const D2RL::LifecycleService* lifecycle{};
     if (!RequireService(&Items, "Item", D2RL::ItemServiceRequiredSize)

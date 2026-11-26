@@ -27,3 +27,7 @@ SOFTWARE.
 The D2R-Tools and RuffnecKk plugin collections were inspected read-only for native call-site references and collision checks. This plugin's implementation was written separately. No source from a collection without a verified license was incorporated. Native call contracts were checked against the game-code capture.
 
 `data/vanilla-string-ids.json` contains only numeric ID reservation ranges observed in vanilla 3.4.95032 localization data. It contains no game localization text or assets.
+
+First-run setup uses JSON for Modern C++ (nlohmann/json) 3.12.0, copyright (c) 2013-2025 Niels Lohmann, under the MIT license. Its source and full license are preserved in `third_party/nlohmann/`; the binary distribution includes `third_party/nlohmann/LICENSE.MIT`.
+
+The shared first-run mutex, loose-mod path discovery, and atomic file-writing pattern were adapted from MadMike's MIT-licensed Character Resistance Display plugin. No other plugin source or behavior is modified by this plugin.

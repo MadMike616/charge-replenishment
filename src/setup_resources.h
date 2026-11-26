@@ -1,0 +1,3 @@
+#pragma once
+#define CR_SETUP_TRANSLATIONS 2001
+#define CR_SETUP_RESERVED_IDS 2002

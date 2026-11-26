@@ -1,9 +1,13 @@
 [charge-replenishment]
 enabled = true
-# Set by tools/install.py after allocating a free ItemStatCost row.
+# Set automatically during first-run setup. Preserve the allocated ID.
 stat_id = -1
 # Also replenish items in the backpack. Equipment includes alternate weapon slots.
 include_inventory = true
 
 [d2rl]
 match = ["charge-replenishment.enabled", "charge-replenishment.stat_id", "charge-replenishment.include_inventory"]
+
+[installation]
+complete = false
+schema_version = 1

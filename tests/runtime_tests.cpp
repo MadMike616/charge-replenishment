@@ -4,6 +4,11 @@
 #include <cstdlib>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (false)
 
+namespace Recharge::Setup {
+bool Success{true};
+auto Ensure(const D2RL::PluginContext*) noexcept -> bool { return Success; }
+}
+
 namespace Fixture {
 std::map<D2RL::ItemHandle, std::vector<D2RL::Items::ItemStatValue>> Stats;
 std::vector<D2RL::Items::ItemInfo> ItemList;
@@ -139,6 +144,8 @@ int main() {
         .registerDataTablesLoadedListener = Fixture::RegisterTables, .registerGameplayEventListener = Fixture::RegisterGameplay};
     Fixture::Services = {{D2RL::ServiceId::Item, legacyItem.data()}, {D2RL::ServiceId::Inventory, &inventoryService},
         {D2RL::ServiceId::DataTable, &tableService}, {D2RL::ServiceId::Thread, &threadService}, {D2RL::ServiceId::Lifecycle, &lifecycle}};
+    Setup::Success = false; CHECK(!D2RLoaderLoadPlugin(&ctx)); CHECK(Fixture::RegisteredTables == 0);
+    Setup::Success = true;
     CHECK(D2RLoaderLoadPlugin(&ctx)); CHECK(!HasItemDetails());
     CHECK(Fixture::RegisteredTables == 1 && Fixture::RegisteredGameplay == 2 && Fixture::UiTasks == 0);
     auto* marker = Fixture::Schema.data() + 399 * 0x144;

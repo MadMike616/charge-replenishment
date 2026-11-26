@@ -37,3 +37,7 @@ The 0x144-byte compiled ItemStatCost rows must match their numeric IDs. The mark
 Every mutation preserves the original high-byte maximum and skill/layer. Item stat snapshots are reread after an update and must contain the exact result. A failed native update or verification disables subsequent replenishment until another table load. Items with ambiguous duplicate charged-skill layers are skipped. This avoids guessing which contributing stat list owns a charge pool.
 
 No explicit game version check is used. Future native layouts require a fresh audit. Single-player replenishment, recovery from zero charges, usable restored casts, save/rejoin persistence, and stash/Cube suspension and resumption were confirmed on 2026-11-26. Multi-skill items and locally hosted multiplayer remain unverified in game.
+
+First-run file setup executes during plugin load before reading runtime settings or registering gameplay callbacks. It uses documented context paths and configuration APIs, ordinary filesystem operations, and DLL-local RCDATA. It installs no hooks and makes no native game calls. Completion is recorded only after the transaction succeeds. Recharge native helpers are unchanged.
+
+The corrected DLL completed first-run setup and loaded successfully on a second launch on 2026-11-27; the user confirmed replenishment on both launches. The completion token and unchanged existing data-file hashes were verified after testing.

@@ -6,7 +6,6 @@ from ctypes import wintypes
 import hashlib
 import json
 import subprocess
-import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,18 +86,17 @@ def main():
     destination.mkdir(parents=True, exist_ok=True)
     dll = build / DLL_NAME
     verified = metadata(dll)
-    for name in ("policy_tests.exe", "runtime_tests.exe", "native_stats_tests.exe"):
+    for name in ("policy_tests.exe", "runtime_tests.exe", "native_stats_tests.exe", "setup_tests.exe"):
         subprocess.run([str(build / name)], check=True)
-    subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", str(ROOT / "tests"), "-p", "test_*.py"], check=True)
     command = (build / "build-release.cmd").read_text(encoding="utf-8")
     if "/O2" not in command or "/DNDEBUG" not in command or "/MT " not in command:
         raise ValueError("The build record does not select the documented Release flags.")
     digest = hashlib.sha256(dll.read_bytes()).hexdigest()
     verified.update({"version": VERSION, "sdk": "0.4.0", "sha256": digest,
-                     "validation": {"policy": "passed", "mocked_sdk_including_88_byte_item_service": "passed", "native_stat_reader": "passed", "installer": "7 tests passed", "in_game": args.in_game_result or "pending"}})
+                     "validation": {"policy": "passed", "mocked_sdk_including_88_byte_item_service": "passed", "native_stat_reader": "passed", "native_first_run_setup": "passed", "shared_install_lock_cross_process_and_token_recheck": "passed", "in_game": args.in_game_result or "pending"}})
     checksum = f"{digest}  {DLL_NAME}\n".encode()
     runtime = {DLL_NAME: dll.read_bytes(), DLL_NAME + ".sha256": checksum}
-    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md", "charge-replenishment.toml", "tools/install.py", "data/localization.json", "data/vanilla-string-ids.json"):
+    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md", "charge-replenishment.toml", "third_party/nlohmann/LICENSE.MIT"):
         runtime[name] = (ROOT / name).read_bytes()
     runtime["BUILD_VERIFICATION.json"] = (json.dumps(verified, indent=2) + "\n").encode()
     sources = {}
