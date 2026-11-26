@@ -96,7 +96,7 @@ def main():
                      "validation": {"policy": "passed", "mocked_sdk_including_88_byte_item_service": "passed", "native_stat_reader": "passed", "native_first_run_setup": "passed", "shared_install_lock_cross_process_and_token_recheck": "passed", "in_game": args.in_game_result or "pending"}})
     checksum = f"{digest}  {DLL_NAME}\n".encode()
     runtime = {DLL_NAME: dll.read_bytes(), DLL_NAME + ".sha256": checksum}
-    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md", "charge-replenishment.toml", "third_party/nlohmann/LICENSE.MIT"):
+    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md", "third_party/nlohmann/LICENSE.MIT"):
         runtime[name] = (ROOT / name).read_bytes()
     runtime["BUILD_VERIFICATION.json"] = (json.dumps(verified, indent=2) + "\n").encode()
     sources = {}
