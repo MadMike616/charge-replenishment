@@ -40,3 +40,5 @@ Native helper calls and build-specific layout witnesses are recorded in `NATIVE_
 First-run setup uses `Local\D2RLoader.ModFirstRunInstall.v1`, matching the audited Character Resistance Display and Random Set Piece installers. It acquires this shared lock before planning or backing up changes, rechecks the completion token under the lock, and retains ownership through file writes, rollback, and token creation. Cross-process tests confirm exclusion during token creation and rollback; a competing-installer test confirms waiting without writes and skipping setup when the token becomes complete during the wait. This is synchronization, not an input/message hook or a native target replacement. Embedded setup resources are DLL-local. No new hook targets are introduced.
 
 First-run DLL setup and a second launch with replenishment still working were confirmed on 2026-11-27. The completion token is true, the configuration mirror matches, and the existing stat/property/localization files retain their pre-test hashes.
+
+2026-11-27 release packaging/documentation review: no hook-site changes; the published DLL is unchanged.
