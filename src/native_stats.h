@@ -17,7 +17,7 @@ using CopyStatFn = std::int32_t (__fastcall*)(void*, std::int32_t, StatRecord*, 
 inline auto CollectStats(void* item, std::int32_t rateStat, GetStatFn getStat, CopyStatFn copyStat,
                          std::vector<D2RL::Items::ItemStatValue>& stats) noexcept -> bool {
     stats.clear();
-    if (!item || !getStat || !copyStat || rateStat < 398 || rateStat > 510) return false;
+    if (!item || !getStat || !copyStat || rateStat != static_cast<std::int32_t>(RepairRateStat)) return false;
     try {
         const auto rate = getStat(item, rateStat, 0);
         stats.push_back({static_cast<std::uint32_t>(rateStat), 0, rate, 0});

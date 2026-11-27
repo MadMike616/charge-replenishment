@@ -1,21 +1,21 @@
-# Hook Inventory â€” Charge Replenishment
+# Hook Inventory — Repair Charge Replenishment
 
 ## Plugin metadata
 
 | Field | Value |
 |---|---|
-| Plugin name | Charge Replenishment |
-| Plugin ID | charge-replenishment |
+| Plugin name | Repair Charge Replenishment |
+| Plugin ID | repair-charge-replenishment |
 | Release version | 1.0.0 |
 | Inventory updated | 2026-11-27 |
-| Source revision | v1.0.0 |
-| D2R build(s) audited | 3.4.95032; single-player validation confirmed |
+| Source revision | repair-v1.0.0 |
+| D2R build(s) audited | 3.4.95032; durability repair and charge replenishment confirmed in game |
 | D2RLoader SDK / Plugin ABI | 0.4.0 / 4 |
 | Audit status | Complete |
 
 ## Scope and method
 
-Inspected every file in `src/`, the default TOML, build definitions, including `src/setup.cpp` and `src/setup_data.h`. Searched for inline detours, CALL/JMP redirects, byte/NOP patches, vtable/shared-slot writes, MinHook, and Win32 input/message hooks. Lifecycle events, queued SDK UI/game tasks, item enumeration and native item editing do not install or replace native targets.
+Inspected every file in `src/`, build definitions, resources, and tests. Checked inline detours, CALL/JMP redirects, byte/NOP patches, vtable/shared-slot writes, MinHook, and Win32 input/message hooks. SDK lifecycle listeners, queued UI/game callbacks, item enumeration, and synchronous native item editing do not install or replace native targets.
 
 ## Hook sites
 
@@ -33,10 +33,10 @@ None identified in the current inventory; this is not a compatibility guarantee.
 
 ## Audit notes
 
-Audited the corrected 1.0.0 source with native first-run file setup. No hook-site changes from the previously tested recharge implementation. No direct native hook/patch, vtable, shared-slot, or OS input/message target is installed. The plugin ID, DLL/config names and `rep-charges` / `item_replenish_charges` data names are distinct in the source audit. The installer allocates free IDs and refuses incompatible existing definitions.
+This fork retains the original Charge Replenishment native helper profile and installs no hook sites. It reads built-in stat 252 instead of a custom stat and mutates only charged-skill stat 204 through the native charge setter and notification path. Durability fields and the repair-rate stat are never written. Helper calls and read-only byte/layout witnesses are documented in `NATIVE_CONTRACT.md`; existing D2RCore thunks are validated, never replaced.
 
-Native helper calls and build-specific layout witnesses are recorded in `NATIVE_CONTRACT.md`; they are not counted as hook sites. The existing D2RCore entry thunks are read and validated, never replaced. Another plugin intercepting those helpers may cause admission to fail closed. Unknown/binary-only plugins in the workspace aggregate remain unknown. Single-player replenishment, zero-charge recovery, save/rejoin persistence, and stash/Cube suspension and resumption were confirmed on 2026-11-26; no compatibility guarantee is inferred from a no-hooks audit.
+The plugin ID, DLL name, console command, and resources are independent of Charge Replenishment. There is no installer, loose-file mutation, configuration resource, or installation token; the shared mod-install lock is unnecessary because no setup file operations occur. No original plugin files are changed.
 
-First-run setup uses `Local\D2RLoader.ModFirstRunInstall.v1`, matching the audited Character Resistance Display and Random Set Piece installers. It acquires this shared lock before planning or backing up changes, rechecks the completion token under the lock, and retains ownership through file writes, rollback, and token creation. Cross-process tests confirm exclusion during token creation and rollback; a competing-installer test confirms waiting without writes and skipping setup when the token becomes complete during the wait. This is synchronization, not an input/message hook or a native target replacement. Embedded setup resources are DLL-local. No new hook targets are introduced.
+Both plugins can affect the same charge pool if an item has both `rep-dur` and the original `rep-charges` property. This is an additive gameplay interaction, not an overlapping hook site. Sources unavailable elsewhere in the workspace remain unknown.
 
-First-run DLL setup and a second launch with replenishment still working were confirmed on 2026-11-27. The completion token is true, the configuration mirror matches, and the existing stat/property/localization files retain their pre-test hashes.
+Release 1.0.0 refresh: no hook-site changes from the initial fork audit. Both durability repair and charge replenishment were confirmed in game on 2026-11-27 with the globally installed Release DLL. No file setup or configuration was required.

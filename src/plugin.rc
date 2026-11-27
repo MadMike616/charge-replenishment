@@ -1,18 +1,7 @@
 #include <windows.h>
 #include <D2RLPlugin/resource.h>
 #include <D2RLPlugin/version.h>
-#include "setup_resources.h"
-#ifndef CHARGE_REPLENISHMENT_CONFIG_PATH
-#define CHARGE_REPLENISHMENT_CONFIG_PATH "../charge-replenishment.toml"
-#endif
 D2RL_PLUGIN_MANIFEST_RESOURCE_ID RCDATA { D2RL_PLUGIN_RESOURCE_DWORD(D2RL_PLUGIN_ABI_VERSION) }
-D2RL_PLUGIN_CONFIG_RESOURCE_ID RCDATA CHARGE_REPLENISHMENT_CONFIG_PATH
-#ifndef CR_TRANSLATIONS_PATH
-#define CR_TRANSLATIONS_PATH "../data/localization.json"
-#define CR_RESERVED_IDS_PATH "../data/vanilla-string-ids.json"
-#endif
-CR_SETUP_TRANSLATIONS RCDATA CR_TRANSLATIONS_PATH
-CR_SETUP_RESERVED_IDS RCDATA CR_RESERVED_IDS_PATH
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0
  PRODUCTVERSION 1,0,0,0
@@ -27,11 +16,11 @@ BEGIN
   BEGIN
    VALUE "CompanyName", "MadMike\0"
    VALUE "Author", "MadMike\0"
-   VALUE "FileDescription", "Automatic item skill charge replenishment\0"
+   VALUE "FileDescription", "Replenishes charges using the Repairs Durability property\0"
    VALUE "FileVersion", "1.0.0\0"
-   VALUE "InternalName", "d2rl-charge-replenishment\0"
-   VALUE "OriginalFilename", "d2rl-charge-replenishment.dll\0"
-   VALUE "ProductName", "Charge Replenishment\0"
+   VALUE "InternalName", "d2rl-repair-charge-replenishment\0"
+   VALUE "OriginalFilename", "d2rl-repair-charge-replenishment.dll\0"
+   VALUE "ProductName", "Repair Charge Replenishment\0"
    VALUE "ProductVersion", "1.0.0\0"
    VALUE "LegalCopyright", "Copyright (c) 2026 MadMike\0"
   END

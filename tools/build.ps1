@@ -23,12 +23,10 @@ cl.exe $common /c src\plugin.cpp /Fo"$buildRoot\plugin.obj"
 if errorlevel 1 exit /b 1
 cl.exe $common /c src\native.cpp /Fo"$buildRoot\native.obj"
 if errorlevel 1 exit /b 1
-cl.exe $common /c src\setup.cpp /Fo"$buildRoot\setup.obj"
-if errorlevel 1 exit /b 1
 cd /d "$sourceRoot\src"
 rc.exe /nologo /I"$sdkRoot\include" /fo"$buildRoot\plugin.res" plugin.rc
 if errorlevel 1 exit /b 1
-link.exe /nologo /DLL /INCREMENTAL:NO /Brepro /MACHINE:X64 /OPT:REF /OPT:ICF /OUT:"$buildRoot\d2rl-charge-replenishment.dll" "$buildRoot\plugin.obj" "$buildRoot\native.obj" "$buildRoot\setup.obj" "$buildRoot\plugin.res"
+link.exe /nologo /DLL /INCREMENTAL:NO /Brepro /MACHINE:X64 /OPT:REF /OPT:ICF /OUT:"$buildRoot\d2rl-repair-charge-replenishment.dll" "$buildRoot\plugin.obj" "$buildRoot\native.obj" "$buildRoot\plugin.res"
 if errorlevel 1 exit /b 1
 cd /d "$sourceRoot"
 cl.exe $common tests\policy_tests.cpp /Fo"$buildRoot\policy_tests.obj" /Fe"$buildRoot\policy_tests.exe" /link /INCREMENTAL:NO
@@ -37,22 +35,18 @@ cl.exe $common tests\runtime_tests.cpp /Fo"$buildRoot\runtime_tests.obj" /Fe"$bu
 if errorlevel 1 exit /b 1
 cl.exe $common tests\native_stats_tests.cpp /Fo"$buildRoot\native_stats_tests.obj" /Fe"$buildRoot\native_stats_tests.exe" /link /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
-cl.exe $common tests\setup_tests.cpp /Fo"$buildRoot\setup_tests.obj" /Fe"$buildRoot\setup_tests.exe" /link /INCREMENTAL:NO "$buildRoot\plugin.res"
-if errorlevel 1 exit /b 1
 "$buildRoot\policy_tests.exe"
 if errorlevel 1 exit /b 1
 "$buildRoot\runtime_tests.exe"
 if errorlevel 1 exit /b 1
 "$buildRoot\native_stats_tests.exe"
 if errorlevel 1 exit /b 1
-"$buildRoot\setup_tests.exe" "$buildRoot\setup-fixtures"
-if errorlevel 1 exit /b 1
 "@
 $batchPath = Join-Path $buildRoot 'build-release.cmd'
 [IO.File]::WriteAllText($batchPath, $batch, [Text.UTF8Encoding]::new($false))
 & cmd.exe /d /c $batchPath
 if ($LASTEXITCODE -ne 0) { throw "Release build or tests failed (exit $LASTEXITCODE)." }
-$dll = Join-Path $buildRoot 'd2rl-charge-replenishment.dll'
+$dll = Join-Path $buildRoot 'd2rl-repair-charge-replenishment.dll'
 $version = (Get-Item -LiteralPath $dll).VersionInfo
 if ($version.FileVersion -ne '1.0.0' -or $version.ProductVersion -ne '1.0.0' -or $version.CompanyName -ne 'MadMike') { throw 'Release metadata mismatch.' }
 Get-Item -LiteralPath $dll | Select-Object FullName,@{n='FileVersion';e={$_.VersionInfo.FileVersion}},@{n='ProductVersion';e={$_.VersionInfo.ProductVersion}},@{n='Author';e={$_.VersionInfo.CompanyName}}

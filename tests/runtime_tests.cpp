@@ -4,11 +4,6 @@
 #include <cstdlib>
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "line %d: %s\n", __LINE__, #x); std::exit(1); } } while (false)
 
-namespace Recharge::Setup {
-bool Success{true};
-auto Ensure(const D2RL::PluginContext*) noexcept -> bool { return Success; }
-}
-
 namespace Fixture {
 std::map<D2RL::ItemHandle, std::vector<D2RL::Items::ItemStatValue>> Stats;
 std::vector<D2RL::Items::ItemInfo> ItemList;
@@ -24,12 +19,6 @@ auto __cdecl Query(const D2RL::PluginContext*, D2RL::ServiceId id, std::uint32_t
     const auto found = Services.find(id);
     *out = found == Services.end() ? nullptr : found->second;
     return version == 1 && *out ? D2RL::ServiceQueryResult::Success : D2RL::ServiceQueryResult::Unavailable;
-}
-auto __cdecl Config(const D2RL::PluginContext*, char* output, std::uint32_t capacity, std::uint32_t* required) noexcept -> bool {
-    constexpr char text[] = "[charge-replenishment]\nenabled = true\nstat_id = 399\ninclude_inventory = true\n";
-    *required = sizeof(text);
-    if (capacity < sizeof(text)) return false;
-    std::memcpy(output, text, sizeof(text)); return true;
 }
 auto __cdecl Console(const D2RL::PluginContext*, const D2RL::ConsoleCommandRegistration*) noexcept -> bool { return true; }
 auto __cdecl RegisterTables(const D2RL::PluginContext*, const D2RL::Lifecycle::DataTablesLoadedListener*, D2RL::Lifecycle::ListenerHandle* handle) noexcept -> D2RL::Lifecycle::Result {
@@ -99,14 +88,14 @@ auto Current(D2RL::ItemHandle item, std::uint32_t layer) -> std::uint32_t {
 }
 void Add(D2RL::ItemHandle handle, D2RL::Items::ItemContainer container, int rate, bool second = false) {
     ItemList.push_back({.structSize = D2RL::Items::ItemInfoSize, .handle = handle, .container = container});
-    Stats[handle] = {{399, 0, rate, 0}, {204, 54 * 64 + 1, 0x1400, 0}};
+    Stats[handle] = {{252, 0, rate, 0}, {204, 54 * 64 + 1, 0x1400, 0}};
     if (second) Stats[handle].push_back({204, 62 * 64 + 2, 0x0A00, 0});
 }
 }
 namespace Recharge::Native {
 auto Initialize(const D2RL::PluginContext*, bool requireStatReader) noexcept -> bool { Fixture::NativeReaderRequired = requireStatReader; return true; }
 auto ReadStats(void*, std::int32_t rateStat, std::vector<D2RL::Items::ItemStatValue>& stats) noexcept -> bool {
-    CHECK(rateStat == 399 && Fixture::Editing != 0);
+    CHECK(rateStat == 252 && Fixture::Editing != 0);
     ++Fixture::NativeReads;
     return CollectStats(reinterpret_cast<void*>(Fixture::Editing), rateStat, Fixture::ReadRate, Fixture::CopyWideStats, stats);
 }
@@ -125,8 +114,8 @@ int main() {
     using namespace Recharge;
     using D2RL::Items::ItemContainer;
     D2RL::PluginApi api{.apiSize = D2RL::PluginApiSize, .logError = Fixture::Error,
-        .readConfig = Fixture::Config, .registerConsoleCommand = Fixture::Console, .queryService = Fixture::Query};
-    D2RL::PluginContext ctx{.contextSize = sizeof(D2RL::PluginContext), .abiVersion = 4, .api = &api};
+        .registerConsoleCommand = Fixture::Console, .queryService = Fixture::Query};
+    D2RL::PluginContext ctx{.contextSize = sizeof(D2RL::PluginContext), .abiVersion = 4, .api = &api, .loadScope = D2RL::LoadScope::Global};
     D2RL::ItemService itemService{.serviceSize = D2RL::ItemServiceSize, .serviceVersion = 1,
         .editNativeItem = Fixture::Edit, .getItemDetails = Fixture::Details};
     // The installed loader exposes only the first 88 bytes of the Item service.
@@ -144,23 +133,26 @@ int main() {
         .registerDataTablesLoadedListener = Fixture::RegisterTables, .registerGameplayEventListener = Fixture::RegisterGameplay};
     Fixture::Services = {{D2RL::ServiceId::Item, legacyItem.data()}, {D2RL::ServiceId::Inventory, &inventoryService},
         {D2RL::ServiceId::DataTable, &tableService}, {D2RL::ServiceId::Thread, &threadService}, {D2RL::ServiceId::Lifecycle, &lifecycle}};
-    Setup::Success = false; CHECK(!D2RLoaderLoadPlugin(&ctx)); CHECK(Fixture::RegisteredTables == 0);
-    Setup::Success = true;
+    CHECK(ctx.activeMod == nullptr && ctx.modDirectory == nullptr && ctx.pluginConfigPath == nullptr);
+    CHECK(api.readConfig == nullptr && api.writeConfig == nullptr);
+    CHECK(!D2RL::HasFlag(D2RLoaderGetPluginInfo()->flags, D2RL::PluginFlags::ModScopedOnly));
     CHECK(D2RLoaderLoadPlugin(&ctx)); CHECK(!HasItemDetails());
     CHECK(Fixture::RegisteredTables == 1 && Fixture::RegisteredGameplay == 2 && Fixture::UiTasks == 0);
-    auto* marker = Fixture::Schema.data() + 399 * 0x144;
+    auto* marker = Fixture::Schema.data() + 252 * 0x144;
     auto* charged = Fixture::Schema.data() + 204 * 0x144;
-    const std::uint16_t markerId = 399, chargedId = 204;
+    const std::uint16_t markerId = 252, chargedId = 204;
     const std::uint32_t callbackFlag = 1U << 10, parameterBits = 16;
-    std::memcpy(marker, &markerId, sizeof(markerId)); marker[8] = 10; marker[0x15] = 10;
+    std::memcpy(marker, &markerId, sizeof(markerId));
+    const std::uint32_t signedFlag = 1U << 1;
+    std::memcpy(marker + 4, &signedFlag, sizeof(signedFlag)); marker[8] = 5; marker[0x15] = 6;
     std::memcpy(charged, &chargedId, sizeof(chargedId)); charged[0x15] = 16;
     std::memcpy(charged + 4, &callbackFlag, sizeof(callbackFlag));
     std::memcpy(charged + 0x20, &parameterBits, sizeof(parameterBits));
     CHECK(CheckBank(3));
     OnTables(&ctx, nullptr, nullptr); CHECK(Fixture::NativeReaderRequired && Ready.load());
-    marker[0x15] = 6; CHECK(!CheckBank(3)); marker[0x15] = 10;
+    marker[0x15] = 5; CHECK(!CheckBank(3)); marker[0x15] = 6;
     std::memcpy(marker + 4, &callbackFlag, sizeof(callbackFlag)); CHECK(!CheckBank(3));
-    std::memset(marker + 4, 0, sizeof(callbackFlag));
+    std::memcpy(marker + 4, &signedFlag, sizeof(signedFlag));
     charged[0x20] = 0; CHECK(!CheckBank(3)); charged[0x20] = 16;
     CHECK(CheckBank(3));
     Active.store(true); Ready.store(true); InGame.store(true); ValidBank[3] = true;
@@ -193,7 +185,7 @@ int main() {
     Fixture::ItemList[1].container = ItemContainer::Inventory;
     Fixture::Frame = 900; GamePulse(&ctx, nullptr);
     CHECK(Fixture::Current(2, 3457) == 1);
-    Fixture::Frame = 1399; GamePulse(&ctx, nullptr); CHECK(Fixture::Current(2, 3457) == 1);
+    Fixture::Frame = 1252; GamePulse(&ctx, nullptr); CHECK(Fixture::Current(2, 3457) == 1);
     Fixture::Frame = 1400; GamePulse(&ctx, nullptr); CHECK(Fixture::Current(2, 3457) == 2);
     // Session generations cannot reuse old item-handle timers.
     Generation.store(2); Fixture::Frame = 100000; GamePulse(&ctx, nullptr);
@@ -218,7 +210,7 @@ int main() {
     Fixture::CorruptWrite = false; Fixture::ItemList.clear(); Fixture::Stats.clear();
     Timers.clear(); Ready.store(true); Generation.store(3); Fixture::Frame = 0;
     Fixture::Add(9, ItemContainer::Inventory, 10);
-    Fixture::Stats[9] = {{399, 0, 10, 0}, {204, 4232, 770, 0}};
+    Fixture::Stats[9] = {{252, 0, 10, 0}, {204, 4232, 770, 0}};
     GamePulse(&ctx, nullptr); CHECK(Eligible.load() == 1);
     Fixture::Frame = 249; GamePulse(&ctx, nullptr); CHECK(Fixture::Current(9, 4232) == 2);
     Fixture::Frame = 250; GamePulse(&ctx, nullptr); CHECK(Fixture::Current(9, 4232) == 3);
@@ -230,5 +222,33 @@ int main() {
     event.kind = D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady;
     Gameplay(&ctx, &event, nullptr); CHECK(InGame.load()); CHECK(Fixture::UiTasks == 1);
     Gameplay(&ctx, &event, nullptr); CHECK(Fixture::UiTasks == 1); // No duplicate recurring UI loops.
-    std::puts("SDK recharge integration tests passed.");
+    // An item with self-repair but no charged skill has nothing to replenish.
+    Fixture::ItemList.clear(); Fixture::Stats.clear(); Timers.clear(); Ready.store(true);
+    Fixture::Add(10, ItemContainer::Inventory, 5);
+    Fixture::Stats[10] = {{252, 0, 5, 0}, {72, 0, 7, 0}, {73, 0, 30, 0}};
+    const auto noChargesWrites = Fixture::Writes;
+    GamePulse(&ctx, nullptr); Fixture::Frame += 10000; GamePulse(&ctx, nullptr);
+    CHECK(Fixture::Writes == noChargesWrites && Eligible.load() == 0 && Ready.load());
+    // Charges without self-repair, and the original fork's custom marker alone,
+    // do not qualify. Replenish Quantity is a different stat.
+    Fixture::Stats[10] = {{399, 0, 10, 0}, {253, 0, 10, 0}, {204, 4232, 770, 0}};
+    GamePulse(&ctx, nullptr); Fixture::Frame += 10000; GamePulse(&ctx, nullptr);
+    CHECK(Fixture::Writes == noChargesWrites && Eligible.load() == 0);
+    // Charge edits preserve current/max durability, the repair-rate property,
+    // and quantity. The game retains ownership of normal durability repair.
+    Fixture::Stats[10] = {{252, 0, 5, 0}, {72, 0, 7, 0}, {73, 0, 30, 0}, {70, 0, 12, 0}, {204, 4232, 770, 0}};
+    Timers.clear(); GamePulse(&ctx, nullptr); Fixture::Frame += 500; GamePulse(&ctx, nullptr);
+    CHECK(Fixture::Current(10, 4232) == 3);
+    CHECK(Fixture::Stats[10][0].value == 5 && Fixture::Stats[10][1].value == 7);
+    CHECK(Fixture::Stats[10][2].value == 30 && Fixture::Stats[10][3].value == 12);
+    // The optional SDK-details path must obey the same eligibility and rate.
+    Items = &itemService; Fixture::Stats[10].back().value = 770; Timers.clear();
+    GamePulse(&ctx, nullptr); Fixture::Frame += 500; GamePulse(&ctx, nullptr);
+    CHECK(Fixture::Current(10, 4232) == 3 && Fixture::Stats[10][1].value == 7);
+    D2RLoaderUnloadPlugin(); CHECK(!Active.load() && !Ready.load());
+    ctx.loadScope = D2RL::LoadScope::Mod; ctx.activeMod = "TestMod";
+    CHECK(D2RLoaderLoadPlugin(&ctx)); CHECK(Active.load());
+    CHECK(Fixture::RegisteredTables == 2 && Fixture::RegisteredGameplay == 4);
+    D2RLoaderUnloadPlugin();
+    std::puts("Global and mod SDK repair-charge integration tests passed.");
 }

@@ -2,7 +2,7 @@
 
 ## 1.0.0 — 2026-11-27
 
-- Adds `rep-charges`, an item property whose value controls skill-charge replenishment using the self-repair rate convention.
-- Restores each charged skill independently on equipped and backpack items, preserving maximum charges.
-- Pauses replenishment with the game and preserves restored charges through normal item saving.
-- Installs the required stat, property, and all 13 language translations automatically on first launch; includes backups, retryable setup, and a console status command.
+- Replenishes skill charges on items with the built-in Repairs Durability property, at that property's repair rate.
+- Preserves normal durability repair and each skill's existing charge maximum.
+- Supports global and mod-specific installation using only the DLL, with no base files or configuration requirement.
+- Includes a console status command and pauses charge replenishment with the game.

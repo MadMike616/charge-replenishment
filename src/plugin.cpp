@@ -1,13 +1,10 @@
 #include "native.h"
 #include "recharge_policy.h"
-#include "setup.h"
 
 #include <array>
 #include <atomic>
-#include <charconv>
 #include <cstring>
 #include <map>
-#include <string_view>
 #include <utility>
 #include <vector>
 #include <windows.h>
@@ -17,12 +14,12 @@ namespace {
 constexpr D2RL::PluginInfo Info{
     .infoSize = D2RL::PluginInfoSize,
     .abiVersion = D2RL_PLUGIN_ABI_VERSION,
-    .id = "charge-replenishment",
-    .name = "Charge Replenishment",
+    .id = "repair-charge-replenishment",
+    .name = "Repair Charge Replenishment",
     .version = "1.0.0",
     .author = "MadMike",
-    .description = "Replenishes an item's skill charges at the rate set by its rep-charges property.",
-    .flags = D2RL::PluginFlags::ModScopedOnly | D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
+    .description = "Replenishes skill charges on items with Repairs Durability while retaining normal durability repair.",
+    .flags = D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
 };
 const D2RL::PluginContext* Context{};
 const D2RL::ItemService* Items{};
@@ -37,8 +34,8 @@ std::uint64_t NextPoll{}; // UI-thread only.
 std::uint64_t GameGeneration{}; // Remaining mutable state is game-thread only.
 std::uint64_t Scan{};
 std::array<bool, 4> ValidBank{};
-std::int32_t StatId{-1};
-bool IncludeInventory{true};
+constexpr std::int32_t StatId = static_cast<std::int32_t>(RepairRateStat);
+constexpr bool IncludeInventory{true};
 struct Entry { Timer timer; std::uint64_t seen{}; };
 using Key = std::pair<D2RL::ItemHandle, std::uint32_t>;
 std::map<Key, Entry> Timers;
@@ -51,56 +48,9 @@ auto RequireService(const Service** service, const char* name, std::uint32_t min
     const auto result = Context->QueryService(service);
     if (result == D2RL::ServiceQueryResult::Success && *service
         && (*service)->serviceVersion == Service::AbiVersion && (*service)->serviceSize >= minimumSize) return true;
-    D2RL::LogErrorF(Context, "Charge Replenishment: %s service unavailable or incomplete (query=%u, size=%u, required=%u).", name,
+    D2RL::LogErrorF(Context, "Repair Charge Replenishment: %s service unavailable or incomplete (query=%u, size=%u, required=%u).", name,
         static_cast<unsigned>(result), *service ? (*service)->serviceSize : 0U, minimumSize);
     return false;
-}
-
-auto Trim(std::string_view text) noexcept -> std::string_view {
-    const auto first = text.find_first_not_of(" \t\r");
-    return first == text.npos ? std::string_view{} : text.substr(first, text.find_last_not_of(" \t\r") - first + 1);
-}
-auto Configuration() noexcept -> bool {
-    std::array<char, 65536> buffer{};
-    std::uint32_t needed{};
-    if (!Context->ReadConfig(buffer.data(), static_cast<std::uint32_t>(buffer.size()), &needed)) return false;
-    std::string_view input(buffer.data());
-    if (input.starts_with("\xEF\xBB\xBF")) input.remove_prefix(3);
-    std::string_view section;
-    unsigned seen{};
-    bool enabled{true};
-    while (!input.empty()) {
-        const auto end = input.find('\n');
-        auto line = input.substr(0, end);
-        input = end == input.npos ? std::string_view{} : input.substr(end + 1);
-        line = Trim(line.substr(0, line.find('#')));
-        if (line.empty()) continue;
-        if (line.front() == '[' && line.back() == ']') { section = line; continue; }
-        if (section != "[charge-replenishment]") continue;
-        const auto equal = line.find('=');
-        if (equal == line.npos) return false;
-        const auto name = Trim(line.substr(0, equal));
-        const auto value = Trim(line.substr(equal + 1));
-        unsigned bit{};
-        if (name == "stat_id") {
-            bit = 1;
-            const auto result = std::from_chars(value.data(), value.data() + value.size(), StatId);
-            if (result.ec != std::errc{} || result.ptr != value.data() + value.size()) return false;
-        } else if (name == "enabled" || name == "include_inventory") {
-            bit = name == "enabled" ? 2U : 4U;
-            if (value != "true" && value != "false") return false;
-            (name == "enabled" ? enabled : IncludeInventory) = value == "true";
-        } else return false;
-        if (seen & bit) return false;
-        seen |= bit;
-    }
-    if (!enabled) { Context->LogInfo("Charge Replenishment is disabled in configuration."); return true; }
-    if (!(seen & 1) || StatId < 398 || StatId > 510) {
-        Context->LogError("Charge Replenishment: automatic setup has no valid stat ID. Check the setup error in the plugin log and restart D2RLoader after supplying any missing base files.");
-        return false;
-    }
-    Active.store(true);
-    return true;
 }
 
 template<class T> auto Field(const std::uint8_t* bytes, std::size_t offset) noexcept -> T {
@@ -114,11 +64,11 @@ auto CheckBank(std::uint32_t bank) noexcept -> bool {
     const auto* rows = static_cast<const std::uint8_t*>(table.rows);
     const auto* marker = rows + static_cast<std::size_t>(StatId) * table.rowSize;
     const auto* charged = rows + ChargedSkillStat * table.rowSize;
-    // Validate the compiled schema too: a stale BIN must never bind to another stat.
+    // Validate the built-in repair-rate and charged-skill schemas in each game bank.
     return Field<std::uint16_t>(marker, 0) == StatId
-        && marker[0x08] == 10 && marker[0x09] == 0 && marker[0x14] == 0 && marker[0x15] == 10
+        && marker[0x08] == 5 && marker[0x09] == 0 && marker[0x14] == 0 && marker[0x15] == 6
         && Field<std::uint32_t>(marker, 0x18) == 0 && Field<std::uint32_t>(marker, 0x20) == 0
-        && marker[0x50] == 0 && (Field<std::uint32_t>(marker, 4) & ((1U << 1) | (1U << 10))) == 0
+        && marker[0x50] == 0 && (Field<std::uint32_t>(marker, 4) & ((1U << 1) | (1U << 10))) == (1U << 1)
         && Field<std::uint16_t>(charged, 0) == ChargedSkillStat && charged[0x15] == 16
         && Field<std::uint32_t>(charged, 0x20) == 16 && (Field<std::uint32_t>(charged, 4) & (1U << 10)) != 0;
 }
@@ -130,7 +80,7 @@ void __cdecl OnTables(const D2RL::PluginContext*, const D2RL::Lifecycle::DataTab
     if (!Active.load() || !Native::Initialize(Context, !HasItemDetails())) return;
     bool any{};
     for (std::uint32_t bank = 1; bank <= 3; ++bank) { ValidBank[bank] = CheckBank(bank); any |= ValidBank[bank]; }
-    if (!any) Context->LogError("Charge Replenishment: no loaded data bank has the installed stat schema. Recompile the mod's BIN files after installing rep-charges.");
+    if (!any) Context->LogError("Repair Charge Replenishment: no loaded data bank has the supported built-in repair-rate and charged-skill schemas; charges are unchanged.");
     Ready.store(any);
 }
 
@@ -189,7 +139,7 @@ auto Details(D2RL::ItemHandle handle, std::vector<D2RL::Items::ItemStatValue>& s
     return true;
 }
 void StopAfterError() noexcept {
-    if (Ready.exchange(false)) Context->LogError("Charge Replenishment: a native update or charge verification failed; further replenishment is disabled until the next data load.");
+    if (Ready.exchange(false)) Context->LogError("Repair Charge Replenishment: a native update or charge verification failed; further replenishment is disabled until the next data load.");
 }
 auto __cdecl Visit(const D2RL::PluginContext*, const D2RL::Items::ItemInfo* item, void*) noexcept -> D2RL::Inventory::IterationAction {
     if (!Ready.load()) return D2RL::Inventory::IterationAction::Stop;
@@ -202,6 +152,10 @@ auto __cdecl Visit(const D2RL::PluginContext*, const D2RL::Items::ItemInfo* item
         std::int64_t rate{};
         for (const auto& stat : stats) if (stat.statId == static_cast<std::uint32_t>(StatId) && stat.layer == 0) rate += stat.value;
         if (rate <= 0 || rate > MaximumRate) return D2RL::Inventory::IterationAction::Continue;
+        const bool charged = std::any_of(stats.begin(), stats.end(), [](const auto& stat) {
+            return stat.statId == ChargedSkillStat && Charges::Decode(stat.value).Valid();
+        });
+        if (!charged) return D2RL::Inventory::IterationAction::Continue;
         Eligible.fetch_add(1);
         EditWork work{.handle = item->handle, .stats = &stats, .rate = static_cast<std::int32_t>(rate)};
         const auto result = Items->editNativeItem(Context, item->handle, Edit, &work);
@@ -246,7 +200,7 @@ void __cdecl UiPulse(const D2RL::PluginContext*, void*) noexcept {
     UiQueued.store(true);
     if (Threads->runOnUiThread(Context, UiPulse, nullptr) != D2RL::Threads::Result::Success) {
         UiQueued.store(false);
-        Context->LogError("Charge Replenishment: UI scheduling failed; replenishment is suspended until a new game.");
+        Context->LogError("Repair Charge Replenishment: UI scheduling failed; replenishment is suspended until a new game.");
         return;
     }
     const auto now = GetTickCount64();
@@ -270,13 +224,13 @@ void __cdecl Gameplay(const D2RL::PluginContext*, const D2RL::Lifecycle::Gamepla
         if (Active.load() && !UiQueued.exchange(true)
             && Threads->runOnUiThread(Context, UiPulse, nullptr) != D2RL::Threads::Result::Success) {
             UiQueued.store(false);
-            Context->LogError("Charge Replenishment: could not start UI scheduling for this game.");
+            Context->LogError("Repair Charge Replenishment: could not start UI scheduling for this game.");
         }
     }
 }
 auto __cdecl Status(D2R::Game::Client*, const D2RL::ConsoleCommandContext*, void*) noexcept -> D2RL::ConsoleCommandResult {
     char text[256]{};
-    std::snprintf(text, sizeof(text), "Charge Replenishment 1.0.0: stat=%d, ready=%s, eligible items=%llu, charges restored=%llu. Interval: 100 / property value seconds.",
+    std::snprintf(text, sizeof(text), "Repair Charge Replenishment 1.0.0: stat=%d, ready=%s, eligible items=%llu, charges restored=%llu. Interval: 100 / Repairs Durability value seconds.",
         StatId, Ready.load() ? "yes" : "no", static_cast<unsigned long long>(Eligible.load()), static_cast<unsigned long long>(Restored.load()));
     Context->WriteConsoleMessage(text);
     return D2RL::ConsoleCommandResult::Handled;
@@ -289,8 +243,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
     using namespace Recharge;
     if (!D2RL::HasContext(context)) return false;
     Context = context;
-    if (!Setup::Ensure(context) || !Configuration()) return false;
-    if (!Active.load()) return true;
+    Active.store(false);
+    Ready.store(false);
     const D2RL::LifecycleService* lifecycle{};
     if (!RequireService(&Items, "Item", D2RL::ItemServiceRequiredSize)
         || !RequireService(&Inventory, "Inventory", D2RL::InventoryServiceRequiredSize)
@@ -300,7 +254,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
     if (!Items->editNativeItem || !Inventory->getLocalPlayer || !Inventory->forEachInventoryItem
         || !Threads->runOnUiThread || !Threads->runOnGameThread || !Tables->getTable
         || !lifecycle->registerDataTablesLoadedListener || !lifecycle->registerGameplayEventListener) {
-        context->LogError("Charge Replenishment: a required SDK function pointer is missing."); return false;
+        context->LogError("Repair Charge Replenishment: a required SDK function pointer is missing."); return false;
     }
     D2RL::Lifecycle::ListenerHandle handle{};
     const D2RL::Lifecycle::DataTablesLoadedListener tableListener{.structSize = D2RL::Lifecycle::DataTablesLoadedListenerSize, .callback = OnTables};
@@ -309,10 +263,11 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
         const D2RL::Lifecycle::GameplayEventListener listener{.structSize = D2RL::Lifecycle::GameplayEventListenerSize, .kind = kind, .callback = Gameplay};
         if (lifecycle->registerGameplayEventListener(context, &listener, &handle) != D2RL::Lifecycle::Result::Success) return false;
     }
-    if (!context->RegisterConsoleCommand("charge-replenishment", Status, "Show charge replenishment status.")) return false;
+    if (!context->RegisterConsoleCommand("repair-charge-replenishment", Status, "Show charge replenishment status.")) return false;
+    Active.store(true);
     context->LogInfo(HasItemDetails()
-        ? "Charge Replenishment 1.0.0 loaded using SDK item details; waiting for validated tables."
-        : "Charge Replenishment 1.0.0 loaded using compatible native item inspection; waiting for validated tables.");
+        ? "Repair Charge Replenishment 1.0.0 loaded using SDK item details; waiting for validated tables."
+        : "Repair Charge Replenishment 1.0.0 loaded using compatible native item inspection; waiting for validated tables.");
     return true;
 }
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {

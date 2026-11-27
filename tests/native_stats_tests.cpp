@@ -8,7 +8,7 @@ using namespace Recharge::Native;
 int Rate{10}, Count{2}, Copies{};
 std::array<StatRecord, 2> Records{{{3457, 204, 0x1400}, {3970, 204, 0x0A03}}};
 auto __fastcall RateRead(void*, std::int32_t stat, std::uint32_t layer) noexcept -> std::int32_t {
-    CHECK(stat == 399 && layer == 0); return Rate;
+    CHECK(stat == 252 && layer == 0); return Rate;
 }
 auto __fastcall ObservedCopy(void*, std::int32_t stat, StatRecord* out, std::int32_t capacity) noexcept -> std::int32_t {
     CHECK(stat == 204 && capacity == 128);
@@ -26,22 +26,26 @@ auto __fastcall CopyRead(void*, std::int32_t stat, StatRecord* out, std::int32_t
 int main() {
     auto* item = reinterpret_cast<void*>(1);
     std::vector<D2RL::Items::ItemStatValue> stats;
-    CHECK(CollectStats(item, 399, RateRead, ObservedCopy, stats));
+    CHECK(CollectStats(item, 252, RateRead, ObservedCopy, stats));
     CHECK(stats.size() == 2 && stats[1].layer == 4232 && stats[1].statId == 204 && stats[1].value == 770);
-    CHECK(CollectStats(item, 399, RateRead, CopyRead, stats));
+    CHECK(CollectStats(item, 252, RateRead, CopyRead, stats));
     CHECK(stats.size() == 3 && stats[0].value == 10);
     CHECK(stats[1].layer == 3457 && stats[1].value == 0x1400); // Zero charges retain their maximum.
     CHECK(stats[2].layer == 3970 && stats[2].value == 0x0A03);
     Rate = 0; const auto before = Copies;
-    CHECK(CollectStats(item, 399, RateRead, CopyRead, stats)); CHECK(stats.size() == 1 && Copies == before);
-    Rate = 1024; CHECK(CollectStats(item, 399, RateRead, CopyRead, stats)); CHECK(Copies == before);
-    Rate = 10; Count = -1; CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
-    Count = 128; CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
-    Count = 2; Records[1].stat = 205; CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
-    Records[1].stat = 204; CHECK(CollectStats(item, 399, RateRead, CopyRead, stats));
-    Records[1].value = 0x100000000LL; CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
-    Records[1].value = 0x0A03; Records[1].layer = 0x10000; CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
+    CHECK(CollectStats(item, 252, RateRead, CopyRead, stats)); CHECK(stats.size() == 1 && Copies == before);
+    Rate = 1024; CHECK(CollectStats(item, 252, RateRead, CopyRead, stats)); CHECK(Copies == before);
+    Rate = 10; Count = -1; CHECK(!CollectStats(item, 252, RateRead, CopyRead, stats));
+    Count = 128; CHECK(!CollectStats(item, 252, RateRead, CopyRead, stats));
+    Count = 2; Records[1].stat = 205; CHECK(!CollectStats(item, 252, RateRead, CopyRead, stats));
+    Records[1].stat = 204; CHECK(CollectStats(item, 252, RateRead, CopyRead, stats));
+    Records[1].value = 0x100000000LL; CHECK(!CollectStats(item, 252, RateRead, CopyRead, stats));
+    Records[1].value = 0x0A03; Records[1].layer = 0x10000; CHECK(!CollectStats(item, 252, RateRead, CopyRead, stats));
+    Count = 0; Records[1].layer = 3970;
+    CHECK(CollectStats(item, 252, RateRead, CopyRead, stats)); CHECK(stats.size() == 1);
+    CHECK(!CollectStats(item, 399, RateRead, CopyRead, stats));
+    CHECK(!CollectStats(item, 253, RateRead, CopyRead, stats));
     CHECK(!CollectStats(item, 204, RateRead, CopyRead, stats));
-    CHECK(!CollectStats(nullptr, 399, RateRead, CopyRead, stats));
+    CHECK(!CollectStats(nullptr, 252, RateRead, CopyRead, stats));
     std::puts("Native stat reader tests passed.");
 }

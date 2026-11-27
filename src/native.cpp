@@ -38,7 +38,7 @@ template<class T> auto ReadAt(const void* address, std::size_t offset, T& output
 template<std::size_t N> auto Check(const D2RL::PluginContext* ctx, std::uintptr_t rva,
                                   const std::array<std::uint8_t, N>& bytes) noexcept -> bool {
     const auto matched = ctx->CheckExpectedBytes(rva, bytes.data(), static_cast<std::uint32_t>(N));
-    if (!matched) D2RL::LogErrorF(ctx, "Charge Replenishment: helper/layout signature differs at RVA 0x%llX; native access disabled.", static_cast<unsigned long long>(rva));
+    if (!matched) D2RL::LogErrorF(ctx, "Repair Charge Replenishment: helper/layout signature differs at RVA 0x%llX; native access disabled.", static_cast<unsigned long long>(rva));
     return matched;
 }
 // D2RLoader replaces these two native entries with RIP-indirect jumps into D2RCore.
@@ -60,7 +60,7 @@ auto CoreThunkTarget(std::uintptr_t rva) noexcept -> void* {
 }
 auto RequireCoreThunk(const D2RL::PluginContext* ctx, std::uintptr_t rva) noexcept -> bool {
     if (CoreThunkTarget(rva)) return true;
-    D2RL::LogErrorF(ctx, "Charge Replenishment: expected a D2RCore-owned native thunk at RVA 0x%llX; native access disabled.", static_cast<unsigned long long>(rva));
+    D2RL::LogErrorF(ctx, "Repair Charge Replenishment: expected a D2RCore-owned native thunk at RVA 0x%llX; native access disabled.", static_cast<unsigned long long>(rva));
     return false;
 }
 template<std::size_t N>
@@ -75,7 +75,7 @@ auto ValidateWideStatCopy(const D2RL::PluginContext* ctx) noexcept -> bool {
     const bool valid = TargetBytes(target, 0, std::to_array<std::uint8_t>({0x41,0x57,0x41,0x56,0x41,0x54,0x56,0x57,0x53,0x31,0xC0,0x45,0x85,0xC9,0x0F,0x8E,0xD4,0x00,0x00,0x00}))
         && TargetBytes(target, 0x7F, std::to_array<std::uint8_t>({0x49,0xC1,0xE4,0x04,0x4A,0x39,0x3C,0x23}))
         && TargetBytes(target, 0xC2, std::to_array<std::uint8_t>({0x0F,0x10,0x07,0x41,0x0F,0x11,0x00,0x4A,0x3B,0x5C,0x11,0x08,0x73,0x15,0x48,0xFF,0xC0,0x48,0x83,0xC6,0x10,0x49,0x83,0xC0,0x10}));
-    if (!valid) ctx->LogError("Charge Replenishment: the active stat-copy implementation does not match the validated 16-byte record layout; native stat inspection is disabled.");
+    if (!valid) ctx->LogError("Repair Charge Replenishment: the active stat-copy implementation does not match the validated 16-byte record layout; native stat inspection is disabled.");
     return valid;
 }
 }
@@ -104,13 +104,13 @@ auto Initialize(const D2RL::PluginContext* ctx, bool requireStatReader) noexcept
             && ValidateWideStatCopy(ctx);
         StatReaderValidated = valid;
     }
-    if (!valid) ctx->LogError("Charge Replenishment: native helper or layout validation failed; charges will not be changed.");
+    if (!valid) ctx->LogError("Repair Charge Replenishment: native helper or layout validation failed; charges will not be changed.");
     return valid;
 }
 
 auto ReadStats(void* item, std::int32_t rateStat, std::vector<D2RL::Items::ItemStatValue>& stats) noexcept -> bool {
     stats.clear();
-    if (!StatReaderValidated || !item || rateStat < 398 || rateStat > 510) return false;
+    if (!StatReaderValidated || !item || rateStat != static_cast<std::int32_t>(RepairRateStat)) return false;
     return CollectStats(item, rateStat, Function<GetStatFn>(0x2F5020), Function<CopyStatFn>(0x2F84B0), stats);
 }
 

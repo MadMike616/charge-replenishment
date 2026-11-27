@@ -5,6 +5,7 @@
 
 namespace Recharge {
 inline constexpr std::uint32_t ChargedSkillStat = 204;
+inline constexpr std::uint32_t RepairRateStat = 252;
 inline constexpr std::uint32_t RateDenominator = 2500; // 25 game frames/s * 100 seconds.
 inline constexpr std::int32_t MaximumRate = 1023;
 

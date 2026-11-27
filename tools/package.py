@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "1.0.0"
-DLL_NAME = "d2rl-charge-replenishment.dll"
+DLL_NAME = "d2rl-repair-charge-replenishment.dll"
 
 
 def metadata(dll: Path) -> dict:
@@ -57,15 +57,25 @@ def metadata(dll: Path) -> dict:
     get_info.restype = ctypes.POINTER(PluginInfo)
     info = get_info().contents
     loader = {"id": info.id.decode(), "name": info.name.decode(), "version": info.version.decode(), "author": info.author.decode(), "abi": info.abi}
-    if loader != {"id": "charge-replenishment", "name": "Charge Replenishment", "version": VERSION, "author": "MadMike", "abi": 4}:
+    if loader != {"id": "repair-charge-replenishment", "name": "Repair Charge Replenishment", "version": VERSION, "author": "MadMike", "abi": 4}:
         raise ValueError(f"Unexpected loader metadata: {loader}")
-    return {"windows": windows, "loader": loader, "configuration": "Release", "debug_flag": False}
+    if info.flags != 0x0E:  # Shared | NativeHooks, without ModScopedOnly.
+        raise ValueError("The fork must allow global loading and use the shared gameplay role.")
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.FindResourceW.argtypes = [wintypes.HMODULE, ctypes.c_void_p, ctypes.c_void_p]
+    kernel.FindResourceW.restype = ctypes.c_void_p
+    if not kernel.FindResourceW(library._handle, 0x03E9, 10):
+        raise ValueError("The SDK manifest resource is missing.")
+    if kernel.FindResourceW(library._handle, 0x03EA, 10):
+        raise ValueError("This DLL-only fork must not embed or require a configuration file.")
+    return {"windows": windows, "loader": loader, "configuration": "Release", "debug_flag": False,
+            "global_supported": True, "configuration_resource_present": False}
 
 
 def archive(path: Path, files: dict[str, bytes]) -> None:
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as output:
         for name, data in sorted(files.items()):
-            record = zipfile.ZipInfo(name, (2026, 11, 26, 0, 0, 0))
+            record = zipfile.ZipInfo(name, (2026, 11, 27, 0, 0, 0))
             record.compress_type = zipfile.ZIP_DEFLATED
             output.writestr(record, data)
     with zipfile.ZipFile(path) as result:
@@ -86,25 +96,25 @@ def main():
     destination.mkdir(parents=True, exist_ok=True)
     dll = build / DLL_NAME
     verified = metadata(dll)
-    for name in ("policy_tests.exe", "runtime_tests.exe", "native_stats_tests.exe", "setup_tests.exe"):
+    for name in ("policy_tests.exe", "runtime_tests.exe", "native_stats_tests.exe"):
         subprocess.run([str(build / name)], check=True)
     command = (build / "build-release.cmd").read_text(encoding="utf-8")
     if "/O2" not in command or "/DNDEBUG" not in command or "/MT " not in command:
         raise ValueError("The build record does not select the documented Release flags.")
     digest = hashlib.sha256(dll.read_bytes()).hexdigest()
     verified.update({"version": VERSION, "sdk": "0.4.0", "sha256": digest,
-                     "validation": {"policy": "passed", "mocked_sdk_including_88_byte_item_service": "passed", "native_stat_reader": "passed", "native_first_run_setup": "passed", "shared_install_lock_cross_process_and_token_recheck": "passed", "in_game": args.in_game_result or "pending"}})
+                     "validation": {"policy": "passed", "mocked_sdk_including_88_byte_item_service": "passed", "native_stat_reader": "passed", "global_and_mod_scopes_without_config_or_mod_paths": "passed", "durability_and_quantity_preserved": "passed", "in_game": args.in_game_result or "pending"}})
     checksum = f"{digest}  {DLL_NAME}\n".encode()
     runtime = {DLL_NAME: dll.read_bytes(), DLL_NAME + ".sha256": checksum}
-    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md", "third_party/nlohmann/LICENSE.MIT"):
+    for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "HOOK_INVENTORY.md", "NATIVE_CONTRACT.md", "CHANGELOG.md"):
         runtime[name] = (ROOT / name).read_bytes()
     runtime["BUILD_VERIFICATION.json"] = (json.dumps(verified, indent=2) + "\n").encode()
     sources = {}
     for path in ROOT.rglob("*"):
         if path.is_file() and not any(p in {".git", "__pycache__", "build", "dist"} for p in path.relative_to(ROOT).parts):
             sources[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-    runtime_zip = destination / f"charge-replenishment-{VERSION}-windows-x64.zip"
-    source_zip = destination / f"charge-replenishment-{VERSION}-source.zip"
+    runtime_zip = destination / f"repair-charge-replenishment-{VERSION}-windows-x64.zip"
+    source_zip = destination / f"repair-charge-replenishment-{VERSION}-source.zip"
     archive(runtime_zip, runtime)
     archive(source_zip, sources)
     (destination / "BUILD_VERIFICATION.json").write_text(json.dumps(verified, indent=2) + "\n", encoding="utf-8")
