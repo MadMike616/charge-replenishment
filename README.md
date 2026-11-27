@@ -2,7 +2,15 @@
 
 A standalone D2RLoader plugin by **MadMike**. Adds `rep-charges`, an item property that automatically restores the item's skill charges. Version **1.0.0**, MIT license.
 
-[Download the latest release](https://github.com/MadMike616/charge-replenishment/releases/latest)
+[Download the rep-charges version](https://github.com/MadMike616/charge-replenishment/releases/tag/v1.0.0)
+
+## Repairs Durability variant
+
+An alternative DLL uses the built-in **Repairs Durability** property to replenish charges while preserving normal durability repair. It supports global or mod-specific installation and needs no base files, custom stat, or configuration.
+
+[Download Repair Charge Replenishment 1.0.0](https://github.com/MadMike616/charge-replenishment/releases/tag/repair-v1.0.0) · [Variant source branch](https://github.com/MadMike616/charge-replenishment/tree/repair-charge-replenishment)
+
+The documentation below describes the original `rep-charges` version.
 
 ## Recharge speed
 
